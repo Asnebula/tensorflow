@@ -2,15 +2,14 @@
 
 
 This section contains tutorials demonstrating how to do specific tasks
-in TensorFlow.  If you are new to TensorFlow, we recommend reading the
-documents in the "@{$get_started$Get Started}" section before reading
-these tutorials.
+in TensorFlow.  If you are new to TensorFlow, we recommend reading
+[Get Started with TensorFlow](/get_started/).
 
 ## Images
 
 These tutorials cover different aspects of image recognition:
 
-  * @{$layers}, which introduces convolutional neural networks (CNNs) and
+  * @{$layers$MNIST}, which introduces convolutional neural networks (CNNs) and
     demonstrates how to build a CNN in TensorFlow.
   * @{$image_recognition}, which introduces the field of image recognition and
     uses a pre-trained model (Inception) for recognizing images.

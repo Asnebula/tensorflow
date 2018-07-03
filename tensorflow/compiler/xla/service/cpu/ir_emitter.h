@@ -30,7 +30,6 @@ limitations under the License.
 #include "llvm/IR/Value.h"
 #include "llvm/Target/TargetMachine.h"
 #include "tensorflow/compiler/xla/service/buffer_assignment.h"
-#include "tensorflow/compiler/xla/service/cpu/external_constant_pool.h"
 #include "tensorflow/compiler/xla/service/cpu/ir_function.h"
 #include "tensorflow/compiler/xla/service/cpu/target_machine_features.h"
 #include "tensorflow/compiler/xla/service/dfs_hlo_visitor_with_default.h"
@@ -67,17 +66,13 @@ class IrEmitter : public DfsHloVisitorWithDefault {
   //              index in the profiling array.
   // computation_to_profile_idx: the mapping from HLO computations to their
   //              index in the profiling array.
-  // external_constant_pool: if non-null, points to an ExternalConstantPool
-  //                         instance into which the Ir emitter can spill
-  //                         constants.
   IrEmitter(const HloModule& hlo_module, const BufferAssignment& assignment,
             llvm::Module* llvm_module,
             std::unordered_map<const HloInstruction*, int64>
                 instruction_to_profile_idx,
             std::unordered_map<const HloComputation*, int64>
                 computation_to_profile_idx,
-            llvm::TargetMachine* target_machine,
-            ExternalConstantPool* external_constant_pool);
+            const TargetMachineFeatures* target_machine);
   ~IrEmitter() override;
 
   // Emit and return the given HLO computation as an LLVM IR
@@ -125,8 +120,6 @@ class IrEmitter : public DfsHloVisitorWithDefault {
   Status HandleDot(HloInstruction* dot) override;
   Status HandleConvolution(HloInstruction* convolution) override;
   Status HandleFft(HloInstruction* fft) override;
-  Status HandleBatchNormTraining(HloInstruction* batch_norm_training) override;
-  Status HandleBatchNormGrad(HloInstruction* batch_norm_grad) override;
   Status HandleCrossReplicaSum(HloInstruction* crs) override;
   Status HandleInfeed(HloInstruction* infeed) override;
   Status HandleOutfeed(HloInstruction* outfeed) override;
@@ -152,6 +145,7 @@ class IrEmitter : public DfsHloVisitorWithDefault {
   Status HandleWhile(HloInstruction* xla_while) override;
   Status HandleConcatenate(HloInstruction* concatenate) override;
   Status HandleConditional(HloInstruction* conditional) override;
+  Status HandleAfterAll(HloInstruction* gen_token) override;
   Status FinishVisit(HloInstruction* root) override;
 
   Status Preprocess(HloInstruction* hlo) override;
@@ -516,9 +510,6 @@ class IrEmitter : public DfsHloVisitorWithDefault {
   // Calculate the alignment of a buffer allocated for a given primitive type.
   int MinimumAlignmentForPrimitiveType(PrimitiveType primitive_type);
 
-  // Calculate the alignment of a buffer with a particular size.
-  int MinimumAlignmentForBufferSize(int64 buffer_size);
-
   // Returns the number of bytes within the shape.
   int64 ByteSizeOf(const Shape& shape) const;
 
@@ -532,16 +523,28 @@ class IrEmitter : public DfsHloVisitorWithDefault {
   Status EmitXfeedTransfer(XfeedKind kind, const Shape& shape,
                            llvm::Value* program_buffer_address);
 
-  const HloModuleConfig& hlo_module_config_;
+  // Returns a ConstExpr bitcast.
+  llvm::Constant* EmitGlobalForLiteral(const Literal& literal);
 
-  const bool parallel_cpu_backend_;
+  const HloModuleConfig& hlo_module_config_;
 
   bool is_top_level_computation_;
 
-  TargetMachineFeatures target_machine_features_;
+  const TargetMachineFeatures& target_machine_features_;
 
-  int64 external_global_constant_counter_ = 0;
-  ExternalConstantPool* external_constant_pool_;
+  struct LiteralPtrHashFunctor {
+    size_t operator()(const Literal* literal) const { return literal->Hash(); }
+  };
+
+  struct LiteralPtrEqualityFunctor {
+    bool operator()(const Literal* lhs, const Literal* rhs) const {
+      return *lhs == *rhs;
+    }
+  };
+
+  tensorflow::gtl::FlatMap<const Literal*, llvm::Constant*,
+                           LiteralPtrHashFunctor, LiteralPtrEqualityFunctor>
+      emitted_literals_;
 
   TF_DISALLOW_COPY_AND_ASSIGN(IrEmitter);
 };

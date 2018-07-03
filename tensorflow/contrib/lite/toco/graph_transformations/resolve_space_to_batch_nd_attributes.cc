@@ -45,7 +45,7 @@ bool ResolveSpaceToBatchNDAttributes::Run(Model* model, std::size_t op_index) {
     return false;
 
   // Handle paddings.
-  const auto& paddings_array = *model->arrays[op->inputs[paddings_index]];
+  const auto& paddings_array = model->GetArray(op->inputs[paddings_index]);
   if (!paddings_array.has_shape()) return false;
   const std::vector<int>& paddings_dims = paddings_array.shape().dims();
   if (paddings_dims.size() != 2) {
@@ -53,7 +53,7 @@ bool ResolveSpaceToBatchNDAttributes::Run(Model* model, std::size_t op_index) {
     // will delete this op.
     return false;
   }
-  std::vector<int> paddings_buffer =
+  const std::vector<int>& paddings_buffer =
       paddings_array.GetBuffer<ArrayDataType::kInt32>().data;
   for (int i = 0; i < paddings_dims[0]; ++i) {
     op->before_paddings.push_back(paddings_buffer[i * 2]);
@@ -61,11 +61,12 @@ bool ResolveSpaceToBatchNDAttributes::Run(Model* model, std::size_t op_index) {
   }
 
   // Handle block_shape.
-  const auto& block_shape_array = *model->arrays[op->inputs[block_shape_index]];
+  const auto& block_shape_array =
+      model->GetArray(op->inputs[block_shape_index]);
   if (!block_shape_array.has_shape()) return false;
   const std::vector<int>& block_shape_dims = block_shape_array.shape().dims();
   CHECK_EQ(block_shape_dims.size(), 1);
-  std::vector<int> block_shape_buffer =
+  const std::vector<int>& block_shape_buffer =
       block_shape_array.GetBuffer<ArrayDataType::kInt32>().data;
   for (int i = 0; i < block_shape_dims[0]; ++i) {
     op->block_shape.push_back(block_shape_buffer[i]);

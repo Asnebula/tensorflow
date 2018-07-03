@@ -12,8 +12,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
-#ifndef THIRD_PARTY_TENSORFLOW_CONTRIB_LITE_ARENA_PLANNER_H_
-#define THIRD_PARTY_TENSORFLOW_CONTRIB_LITE_ARENA_PLANNER_H_
+#ifndef TENSORFLOW_CONTRIB_LITE_ARENA_PLANNER_H_
+#define TENSORFLOW_CONTRIB_LITE_ARENA_PLANNER_H_
 
 #include <memory>
 #include <vector>
@@ -25,7 +25,7 @@ limitations under the License.
 
 namespace tflite {
 
-class AllocationInfo;
+struct AllocationInfo;
 
 // A memory planner that makes all the allocations using arenas.
 //
@@ -33,7 +33,7 @@ class AllocationInfo;
 // each tensor needs to be allocated and deallocated, and preallocates all the
 // necessary memory (the PlanAllocations phase). It then assigns portions of
 // this memory buffer to each tensor (the ExecuteAllocations phase). Tensors may
-// share some of the bufer if a tensor B is to be allocated after another tensor
+// share some of the buffer if a tensor B is to be allocated after another tensor
 // A has been deallocated.
 //
 // If dynamic tensors are used the planning steps can be repeated during model
@@ -43,8 +43,11 @@ class AllocationInfo;
 class ArenaPlanner : public MemoryPlanner {
  public:
   // Ownership of 'context' is not taken and it must remain util the
-  // ArenaPlanner is destroyed.
-  ArenaPlanner(TfLiteContext* context, std::unique_ptr<GraphInfo> graph_info);
+  // ArenaPlanner is destroyed. If 'preserve_inputs' is true the inputs to the
+  // graph will not share memory with any other tensor, effectively preserving
+  // them until the end of inference.
+  ArenaPlanner(TfLiteContext* context, std::unique_ptr<GraphInfo> graph_info,
+               bool preserve_inputs);
   ~ArenaPlanner() override;
   ArenaPlanner(const ArenaPlanner&) = delete;
   ArenaPlanner& operator=(const ArenaPlanner&) = delete;
@@ -100,8 +103,10 @@ class ArenaPlanner : public MemoryPlanner {
   // Raw memory buffer that is allocated for persistent tensors that are
   // declared as kTfLiteArenaRwPersistent.
   SimpleMemoryArena persistent_arena_;
+
+  bool preserve_inputs_;
 };
 
 }  // namespace tflite
 
-#endif  // THIRD_PARTY_TENSORFLOW_CONTRIB_LITE_ARENA_PLANNER_H_
+#endif  // TENSORFLOW_CONTRIB_LITE_ARENA_PLANNER_H_

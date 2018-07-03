@@ -21,8 +21,9 @@ limitations under the License.
 #include "tensorflow/contrib/verbs/grpc_verbs_client.h"
 #include "tensorflow/contrib/verbs/verbs_service.pb.h"
 #include "tensorflow/core/common_runtime/bfc_allocator.h"
+#include "tensorflow/core/common_runtime/gpu/gpu_process_state.h"
 #include "tensorflow/core/common_runtime/gpu/gpu_util.h"
-#include "tensorflow/core/common_runtime/gpu/process_state.h"
+#include "tensorflow/core/common_runtime/process_state.h"
 #include "tensorflow/core/distributed_runtime/rpc/grpc_worker_cache.h"
 #include "tensorflow/core/distributed_runtime/session_mgr.h"
 #include "tensorflow/core/framework/allocator_registry.h"
@@ -116,9 +117,9 @@ void RdmaMgr::SetupChannels() {
         }
         CHECK(i == RdmaChannel::kNumMessageBuffers);
       } else {
-        LOG(ERROR) << "Connecting to " << worker_name
-                   << ": Got " << s.error_message() << ". Retrying ("
-                   << (attempts + 1) << "/" << max_num_attempts << ")..." ;
+        LOG(ERROR) << "Connecting to " << worker_name << ": Got "
+                   << s.error_message() << ". Retrying (" << (attempts + 1)
+                   << "/" << max_num_attempts << ")...";
         if (++attempts == max_num_attempts) {
           break;
         }
@@ -159,19 +160,17 @@ bool RdmaMgr::ConnectivityCheck() {
       ibv_wc_status s = rdma_adapter_->wc_[i].status;
       // recv complete
       if ((int)rdma_adapter_->wc_[i].wr_id == RdmaChannel::kPingRecvWrid) {
-        CHECK(s == IBV_WC_SUCCESS) << ": " << ibv_wc_status_str(
-                                                  rdma_adapter_->wc_[i].status)
-                                   << "(" << rdma_adapter_->wc_[i].status
-                                   << ") for PING_RECV_WRID";
+        CHECK(s == IBV_WC_SUCCESS)
+            << ": " << ibv_wc_status_str(rdma_adapter_->wc_[i].status) << "("
+            << rdma_adapter_->wc_[i].status << ") for PING_RECV_WRID";
         ++rcnt;
         // send complete
       } else {
         RdmaChannel* rc =
             reinterpret_cast<RdmaChannel*>(rdma_adapter_->wc_[i].wr_id);
-        CHECK(s == IBV_WC_SUCCESS) << ": " << ibv_wc_status_str(
-                                                  rdma_adapter_->wc_[i].status)
-                                   << "(" << rdma_adapter_->wc_[i].status
-                                   << ") to " << rc->remote_name_;
+        CHECK(s == IBV_WC_SUCCESS)
+            << ": " << ibv_wc_status_str(rdma_adapter_->wc_[i].status) << "("
+            << rdma_adapter_->wc_[i].status << ") to " << rc->remote_name_;
         ++scnt;
       }
     }  // for
@@ -238,8 +237,9 @@ int TryToReadNumaNode(ibv_device* device) {
   if (strings::safe_strto32(content, &value)) {
     if (value < 0) {
       LOG(INFO) << "Successful NUMA node read from SysFS had negative value ("
-                << value << "), but there must be at least one NUMA node"
-                            ", so returning NUMA node zero";
+                << value
+                << "), but there must be at least one NUMA node"
+                   ", so returning NUMA node zero";
       return 0;
     }
     LOG(INFO) << "NUMA node for device: " << device->name << " is " << value;
@@ -283,7 +283,7 @@ void RdmaMgr::InitAllocators() {
 
   Allocator* allocators[] = {
 #if GOOGLE_CUDA
-    ProcessState::singleton()->GetCUDAHostAllocator(0),
+    GPUProcessState::singleton()->GetCUDAHostAllocator(0),
     ProcessState::singleton()->GetCPUAllocator(0),
 #endif  // GOOGLE_CUDA
     cpu_allocator(),
@@ -302,8 +302,8 @@ void RdmaMgr::InitAllocators() {
         &RdmaMemoryMgr::EvictMemoryRegion, &RdmaMemoryMgr::Singleton(), _1, _2);
 
     auto* visitable_allocator = dynamic_cast<VisitableAllocator*>(allocator);
-    CHECK(visitable_allocator) << "is not visitable for instrumentation"
-                               << allocator->Name();
+    CHECK(visitable_allocator)
+        << "is not visitable for instrumentation" << allocator->Name();
     // Make sure we don't instrument the same allocator twice
     if (instrumented_.find(allocator) == std::end(instrumented_)) {
       visitable_allocator->AddAllocVisitor(alloc_visitor);
@@ -324,7 +324,8 @@ void RdmaMgr::InitAllocators() {
         std::bind(&RdmaMemoryMgr::InsertMemoryRegion,
                   &RdmaMemoryMgr::Singleton(), _1, _2, std::string(buf));
 
-    ProcessState::singleton()->AddGPUAllocVisitor(bus_id, cuda_alloc_visitor);
+    GPUProcessState::singleton()->AddGPUAllocVisitor(bus_id,
+                                                     cuda_alloc_visitor);
     LOG(INFO) << "Instrumenting GPU allocator with bus_id " << bus_id;
   }
 #endif  // GOOGLE_CUDA
